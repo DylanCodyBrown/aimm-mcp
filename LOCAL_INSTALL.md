@@ -149,6 +149,108 @@ rm -rf ~/Documents/AIMM           # optional: wipe local state
 
 The checkout itself is just a directory — delete it whenever.
 
+## Distributing to a team without PyPI
+
+PyPI isn't the only path. If you want your team installing the same
+server without publishing publicly, three options in order of
+ceremony:
+
+### Option 1: install from a git repo (zero infrastructure)
+
+`uvx` accepts a git URL directly. For a public repo, this is one
+command:
+
+```bash
+claude mcp add aimm --scope user -- \
+  uvx --from git+https://github.com/<org>/<repo>.git aimm-mcp
+```
+
+For a private repo, embed an auth token or use SSH:
+
+```bash
+# HTTPS + PAT (the token needs `repo` scope on a private repo)
+claude mcp add aimm --scope user -- \
+  uvx --from "git+https://x-access-token:${GITHUB_TOKEN}@github.com/<org>/<repo>.git" aimm-mcp
+
+# SSH (uses the user's SSH keys)
+claude mcp add aimm --scope user -- \
+  uvx --from "git+ssh://git@github.com/<org>/<repo>.git" aimm-mcp
+```
+
+Pin to a tag or branch by appending `@<ref>`:
+`git+https://github.com/<org>/<repo>.git@v0.3.0`.
+
+uv clones the repo on first run and caches the built venv — second
+spawn is fast. Updating means clearing the cache (`uv cache clean
+aimm-mcp`) or pinning a new ref.
+
+**Pros:** one command, no infrastructure, easy to roll forward.
+**Cons:** every machine needs repo access; first-spawn is a few
+seconds slower than a wheel install.
+
+### Option 2: GitHub Releases + built wheels (clean versioning)
+
+Build a wheel in CI, attach it to a release, install from URL:
+
+```yaml
+# .github/workflows/release.yml — runs on tag push
+- run: uv build                          # produces dist/aimm_mcp-*-py3-none-any.whl
+- uses: softprops/action-gh-release@v2
+  with:
+    files: dist/*
+```
+
+Then team members run:
+
+```bash
+claude mcp add aimm --scope user -- \
+  uvx --from "https://github.com/<org>/<repo>/releases/download/v0.3.0/aimm_mcp-0.3.0-py3-none-any.whl" aimm-mcp
+```
+
+Private repos: same URL, just append a `--header
+"Authorization: token ${GITHUB_TOKEN}"` via `UV_EXTRA_INDEX_AUTH` or
+wrap in a tiny launcher script. Pinning is built in — the URL
+carries the version.
+
+**Pros:** fast spawn (wheel install, no build), explicit version
+pinning, audit trail on the release.
+**Cons:** needs a release workflow.
+
+### Option 3: private package index
+
+For a team that already runs a private index (Azure Artifacts, AWS
+CodeArtifact, GitHub Packages, DevPI, JFrog, …), the path mirrors
+PyPI:
+
+```bash
+# Publishing
+uv build
+uv publish --index https://your.internal/simple ...
+
+# Installing
+claude mcp add aimm --scope user -- \
+  uvx --index https://your.internal/simple aimm-mcp
+```
+
+Auth via `UV_INDEX_URL` env var or `~/.netrc`. Versions are
+discoverable via the index; `uvx aimm-mcp==0.3.0` pins exactly.
+
+**Pros:** identical UX to PyPI (`uvx aimm-mcp`); full version
+resolution; works with internal compliance scans.
+**Cons:** standing infrastructure to maintain.
+
+### What I'd pick
+
+Small team (<10): **option 1**. One command, no infra. Use a tagged
+ref for stability (`@v0.3.0`).
+
+Medium team or "we want stable installs the team doesn't have to
+re-clone on every update": **option 2**. CI builds wheels on tag
+push; team installs from the release URL.
+
+Already running an internal index for other Python tools:
+**option 3**. Adds aimm-mcp to a path they already trust.
+
 ## Troubleshooting
 
 - **`claude mcp list` shows `failed`.** Run the smoke-test command
