@@ -139,36 +139,29 @@ async def _read_context(args: dict[str, Any]) -> list[TextContent]:
             ),
         )]
     fmt = args.get("format", "xml")
-    if fmt == "markdown":
-        body = _render_markdown_stub(cfg)
-    else:
-        body = _render_xml_stub(cfg)
+    if fmt not in ("xml", "markdown"):
+        fmt = "xml"
+    connections = list(repo.iter_connections())
+    tables = list(repo.iter_tables())
+    joins_doc = _read_joins_doc()
+    from ..format_context import format_project_context
+    body = format_project_context(cfg, connections, tables, joins_doc=joins_doc, fmt=fmt)
     return [TextContent(type="text", text=body)]
 
 
-def _render_xml_stub(cfg: ProjectConfig) -> str:
-    # Skeleton renderer for the scaffold; the full implementation
-    # lives in format_context.py and wires through every table /
-    # connection / join. Shipping a placeholder here so the tool is
-    # functional end-to-end on day one.
-    tables = list(repo.iter_tables())
-    connections = list(repo.iter_connections())
-    return (
-        f'<aimm_project name="{cfg.name}" dialect="{cfg.dialect}">\n'
-        f"  <description>{cfg.description}</description>\n"
-        f"  <connections count=\"{len(connections)}\"/>\n"
-        f"  <tables count=\"{len(tables)}\"/>\n"
-        "</aimm_project>\n"
-    )
+def _read_joins_doc() -> dict | None:
+    """Best-effort read of AIMM/joins.json so the XML preamble's
+    <joins> block reflects the last regenerate. Missing or malformed
+    file → no block emitted; nothing else breaks."""
+    import json
 
-
-def _render_markdown_stub(cfg: ProjectConfig) -> str:
-    tables = list(repo.iter_tables())
-    connections = list(repo.iter_connections())
-    return (
-        f"# {cfg.name}\n\n"
-        f"Dialect: `{cfg.dialect}`\n\n"
-        f"{cfg.description or '_no description set_'}\n\n"
-        f"- Connections: {len(connections)}\n"
-        f"- Tables: {len(tables)}\n"
-    )
+    path = paths.joins_json_path()
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("joins"), list):
+            return data
+    except Exception:  # noqa: BLE001
+        pass
+    return None
