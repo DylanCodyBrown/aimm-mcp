@@ -197,9 +197,8 @@ def _try_migrate_legacy() -> Optional[Project]:
     conns_dir = paths.aimm_root() / "connections"
 
     # Only consider it legacy state when there are actual files to
-    # migrate. `paths.ensure_layout()` creates empty tables/ and
-    # connections/ dirs eagerly, so directory existence alone isn't
-    # a signal.
+    # migrate. Empty dirs (from a prior install that no longer needs
+    # them) don't count.
     def _has_json_files(d: Path) -> bool:
         if not d.is_dir():
             return False

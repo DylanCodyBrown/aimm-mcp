@@ -1,25 +1,21 @@
 """Filesystem layout for the local AIMM project.
 
-The extension version lives inside a VS Code workspace. The MCP fork
-lives at a fixed location under the user's home so any Claude session
-(or other MCP client) finds the same project without configuration:
+Single source of truth on disk: `~/Documents/AIMM/project.json`.
+Everything else either lives in memory (XML / markdown renderings of
+the project) or is a side-file that isn't project state
+(discovered_joins.json — scan candidates; diagnostics.log — append-log):
 
     ~/Documents/AIMM/
-    ├── aimm.json                project config
-    ├── tables/<name>.json       per-table metadata
-    ├── connections/<name>.json  per-connection metadata
-    ├── model.mmd                generated ER diagram
-    ├── model_lineage.mmd        generated lineage flowchart
-    ├── lineage.json             flat upstream→downstream edges
-    ├── relationships.json       flat FK edges
-    ├── joins.json               project-tracked joins
-    ├── discovered_joins.json    candidates from a folder scan
-    ├── project_context.xml      agent-facing context dump
-    ├── diagnostics.log          ODBC query log
-    └── .sync_cache/             reserved (unused for now)
+    ├── project.json             single source of truth
+    ├── discovered_joins.json    candidates from a folder scan (separate)
+    └── diagnostics.log          ODBC query append-log (separate)
 
-Single-project: one model per machine. No multi-project routing, no
---project flag.
+No derived snapshots on disk. Earlier versions wrote
+model.mmd / model_lineage.mmd / lineage.json / relationships.json /
+joins.json / project_context.xml; those have been removed and are
+deleted on activation when found.
+
+Single-project: one model per machine.
 """
 
 from __future__ import annotations
@@ -31,62 +27,17 @@ AIMM_DIR_NAME = "AIMM"
 
 
 def aimm_root() -> Path:
-    """Resolve the AIMM directory under the user's Documents folder.
-
-    Cross-platform: `Path.home() / 'Documents' / 'AIMM'` on Windows,
-    macOS, and Linux. Most distros either honour the convention or have
-    the folder linked. We don't try XDG_DOCUMENTS_DIR — single answer
-    everywhere keeps the install one-liner predictable.
-    """
+    """Resolve the AIMM directory under the user's Documents folder."""
     return Path.home() / "Documents" / AIMM_DIR_NAME
 
 
-def project_config_path() -> Path:
-    return aimm_root() / "aimm.json"
-
-
-def tables_dir() -> Path:
-    return aimm_root() / "tables"
-
-
-def table_json_path(name: str) -> Path:
-    return tables_dir() / f"{name}.json"
-
-
-def connections_dir() -> Path:
-    return aimm_root() / "connections"
-
-
-def connection_json_path(name: str) -> Path:
-    return connections_dir() / f"{name}.json"
-
-
-def mermaid_er_path() -> Path:
-    return aimm_root() / "model.mmd"
-
-
-def mermaid_lineage_path() -> Path:
-    return aimm_root() / "model_lineage.mmd"
-
-
-def lineage_json_path() -> Path:
-    return aimm_root() / "lineage.json"
-
-
-def relationships_json_path() -> Path:
-    return aimm_root() / "relationships.json"
-
-
-def joins_json_path() -> Path:
-    return aimm_root() / "joins.json"
+def project_path() -> Path:
+    """The single canonical file. Holds project + connections + tables."""
+    return aimm_root() / "project.json"
 
 
 def discovered_joins_path() -> Path:
     return aimm_root() / "discovered_joins.json"
-
-
-def context_xml_path() -> Path:
-    return aimm_root() / "project_context.xml"
 
 
 def diagnostics_log_path() -> Path:
@@ -94,13 +45,55 @@ def diagnostics_log_path() -> Path:
 
 
 def ensure_layout() -> None:
-    """Create the AIMM folder skeleton if it doesn't exist. Idempotent —
-    safe to call on every tool invocation."""
-    root = aimm_root()
-    root.mkdir(parents=True, exist_ok=True)
-    tables_dir().mkdir(exist_ok=True)
-    connections_dir().mkdir(exist_ok=True)
+    """Create the AIMM folder if it doesn't exist. Idempotent — safe
+    to call on every tool invocation."""
+    aimm_root().mkdir(parents=True, exist_ok=True)
 
 
 def is_initialized() -> bool:
-    return project_config_path().exists()
+    return project_path().exists()
+
+
+# ---------------------------------------------------------------------------
+# Legacy cleanup
+# ---------------------------------------------------------------------------
+
+
+# Derived artefacts older versions wrote. Removed on activation so an
+# existing install comes clean after upgrading. Idempotent: once a
+# user is on the new layout, this is a no-op.
+_LEGACY_DERIVED_FILES = (
+    "model.mmd",
+    "model_lineage.mmd",
+    "lineage.json",
+    "relationships.json",
+    "joins.json",
+    "project_context.xml",
+)
+
+
+def purge_legacy_derived_files() -> None:
+    root = aimm_root()
+    for name in _LEGACY_DERIVED_FILES:
+        target = root / name
+        try:
+            target.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            pass
+    # Pre-v0.2 per-file storage layout — same one-shot migration the
+    # state loader already runs, but the empty dirs can linger if all
+    # the JSONs were deleted manually. Drop them when empty.
+    for sub in ("tables", "connections"):
+        d = root / sub
+        if d.is_dir():
+            try:
+                # rmdir() is no-op-safe via try/except — only succeeds
+                # when empty, which is the only case we want.
+                next(d.iterdir())
+            except StopIteration:
+                try:
+                    d.rmdir()
+                except OSError:
+                    pass
+            except Exception:  # noqa: BLE001
+                pass

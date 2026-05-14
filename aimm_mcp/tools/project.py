@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as _json
 from typing import Any
 
 from mcp.types import TextContent, Tool
@@ -35,18 +36,22 @@ TOOLS: list[Tool] = [
     Tool(
         name="aimm_read_project_context",
         description=(
-            "Return the entire project — header, connections, tables, "
-            "columns, primary keys, FK relationships, upstream/downstream "
-            "lineage, and the project-tracked joins list. Always call "
-            "this once at the start of a session before answering data-"
-            "model questions; one read is the canonical context for "
-            "every other tool. Defaults to XML for cross-referential "
-            "reasoning; pass `format: 'markdown'` for a leaner digest."
+            "Return the entire AIMM project — header, every connection, every "
+            "tracked table with its columns, primary keys, FK relationships, "
+            "and upstream/downstream lineage. Always call this once at the "
+            "start of a session before answering data-model questions; one "
+            "read is the canonical context for every other tool. Formats:\n"
+            "  - `xml` (default) — tag-delimited, post-trained-on, best "
+            "    for cross-referential reasoning.\n"
+            "  - `markdown` — leaner prose digest.\n"
+            "  - `json` — raw contents of ~/Documents/AIMM/project.json, "
+            "    same shape the server writes on every mutation. Use this "
+            "    when you want to operate on the project structurally."
         ),
         inputSchema={
             "type": "object",
             "properties": {
-                "format": {"type": "string", "enum": ["xml", "markdown"]},
+                "format": {"type": "string", "enum": ["xml", "markdown", "json"]},
             },
         },
     ),
@@ -84,7 +89,7 @@ async def _init_project(args: dict[str, Any]) -> list[TextContent]:
         return [TextContent(
             type="text",
             text=(
-                f"Project already initialised at {paths.aimm_root() / 'project.json'}. "
+                f"Project already initialised at {paths.project_path()}. "
                 f"Refreshed header fields from arguments. Current state: "
                 f"{len(existing.tables)} tables, {len(existing.connections)} connections."
             ),
@@ -100,8 +105,7 @@ async def _init_project(args: dict[str, Any]) -> list[TextContent]:
     return [TextContent(
         type="text",
         text=(
-            f"Initialised AIMM project '{cfg.name}' at "
-            f"{paths.aimm_root() / 'project.json'}. "
+            f"Initialised AIMM project '{cfg.name}' at {paths.project_path()}. "
             "Next: add a connection with aimm_upsert_connection."
         ),
     )]
@@ -112,34 +116,25 @@ async def _read_context(args: dict[str, Any]) -> list[TextContent]:
     if project is None:
         return [TextContent(
             type="text",
-            text=(
-                f"No AIMM project at {paths.aimm_root()}. Call aimm_init_project first."
-            ),
+            text=f"No AIMM project at {paths.aimm_root()}. Call aimm_init_project first.",
         )]
     fmt = args.get("format", "xml")
+    if fmt == "json":
+        # Hand back the on-disk JSON exactly — same bytes the server
+        # writes on every mutation. Lets the agent reason over the
+        # structural shape without a separate parse step.
+        try:
+            body = paths.project_path().read_text(encoding="utf-8")
+        except Exception as err:  # noqa: BLE001
+            return [TextContent(type="text", text=f"Couldn't read project.json: {err}")]
+        return [TextContent(type="text", text=body)]
     if fmt not in ("xml", "markdown"):
         fmt = "xml"
-    joins_doc = _read_joins_doc()
     body = format_project_context(
         project.project,
         project.connections,
         project.tables,
-        joins_doc=joins_doc,
+        joins_doc=None,
         fmt=fmt,
     )
     return [TextContent(type="text", text=body)]
-
-
-def _read_joins_doc() -> dict | None:
-    import json
-
-    p = paths.joins_json_path()
-    if not p.exists():
-        return None
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-        if isinstance(data, dict) and isinstance(data.get("joins"), list):
-            return data
-    except Exception:  # noqa: BLE001
-        pass
-    return None

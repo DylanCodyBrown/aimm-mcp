@@ -29,7 +29,6 @@ This is an AI Model Manager project context dump. The vocabulary:
     <relationships> FK-like edges. Each <relationship> has `from` and `to` qualified as table.column (composite keys comma-separated), plus `cardinality`. Inline content is a human-readable sentence summarising the edge.
     <upstream> lineage. Each <depends_on> has `ref` (another table or free-form external identifier). Inline content is the reason / description.
     <downstream> derived (read-only) — comma-separated list of tables that declare this one as upstream.
-- After the table list, a top-level <joins> block aggregates project-tracked joins (when AIMM/joins.json exists). Each <join> has `from` and `to` qualified as table.column (composite keys comma-separated), plus a `cardinality` attribute when known. Children: <description> when set; <source> per origin (kind="relationship" with the declaring table, or kind="sql" with the file path, line, join kind, and ON text).
 - Column references inside <relationship> and lineage tags are qualified as `table.column` so cross-references are unambiguous.
 - Empty / default fields are omitted to reduce noise.
 </aimm_schema>"""
@@ -39,12 +38,12 @@ def format_project_context(
     cfg: ProjectConfig,
     connections: list[Connection],
     tables: list[TableMeta],
-    joins_doc: Optional[dict] = None,
+    joins_doc: Optional[dict] = None,  # kept for backwards-compat; ignored
     fmt: str = "xml",
 ) -> str:
     if fmt == "markdown":
-        return _render_markdown(cfg, connections, tables, joins_doc)
-    return _render_xml(cfg, connections, tables, joins_doc)
+        return _render_markdown(cfg, connections, tables)
+    return _render_xml(cfg, connections, tables)
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +55,6 @@ def _render_xml(
     cfg: ProjectConfig,
     connections: list[Connection],
     tables: list[TableMeta],
-    joins_doc: Optional[dict],
 ) -> str:
     out: list[str] = [XML_SCHEMA_PREAMBLE, ""]
 
@@ -92,9 +90,6 @@ def _render_xml(
     for t in tables:
         if t.table_name not in seen:
             _render_xml_table(t, out, downstream_by_ref.get(t.table_name, []))
-
-    if joins_doc and joins_doc.get("joins"):
-        _render_xml_joins(joins_doc, out)
 
     out.append("</aimm_project>")
     out.append("")
@@ -181,35 +176,6 @@ def _render_xml_table(meta: TableMeta, out: list[str], downstream: list[str]) ->
     out.append("  </table>")
 
 
-def _render_xml_joins(doc: dict, out: list[str]) -> None:
-    out.append("  <joins>")
-    for j in doc.get("joins", []):
-        from_q = ", ".join(f"{j['from_table']}.{c}" for c in j["from_columns"])
-        to_q = ", ".join(f"{j['to_table']}.{c}" for c in j["to_columns"])
-        a = _attrs({
-            "from": from_q,
-            "to": to_q,
-            "cardinality": j.get("cardinality"),
-        })
-        out.append(f"    <join {a}>")
-        if j.get("description"):
-            out.append(f"      <description>{_xml_text(j['description'])}</description>")
-        for s in j.get("sources", []):
-            if s.get("kind") == "relationship":
-                sa = _attrs({"kind": "relationship", "from_table": s.get("from_table")})
-                out.append(f"      <source {sa}/>")
-            else:
-                sa = _attrs({
-                    "kind": "sql",
-                    "file": s.get("file"),
-                    "line": str(s["line"]) if s.get("line") else None,
-                    "join_kind": s.get("join_kind"),
-                })
-                out.append(f"      <source {sa}>{_xml_text(s.get('on_text', ''))}</source>")
-        out.append("    </join>")
-    out.append("  </joins>")
-
-
 def _relationship_sentence(
     from_table: str, to_table: str, cardinality: str, description: Optional[str],
 ) -> str:
@@ -244,7 +210,6 @@ def _render_markdown(
     cfg: ProjectConfig,
     connections: list[Connection],
     tables: list[TableMeta],
-    joins_doc: Optional[dict],
 ) -> str:
     out: list[str] = []
     out.append(f"# {cfg.name}")
@@ -320,18 +285,6 @@ def _render_markdown(
         if ds:
             out.append("")
             out.append(f"Downstream: {', '.join(ds)}")
-
-    if joins_doc and joins_doc.get("joins"):
-        out.append("")
-        out.append(f"## Joins ({len(joins_doc['joins'])})")
-        for j in joins_doc["joins"]:
-            line = (
-                f"- {j['from_table']}.{','.join(j['from_columns'])} ↔ "
-                f"{j['to_table']}.{','.join(j['to_columns'])}"
-            )
-            if j.get("cardinality"):
-                line += f" _({j['cardinality']})_"
-            out.append(line)
 
     out.append("")
     return "\n".join(out)
