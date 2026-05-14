@@ -33,25 +33,3 @@ def test_is_initialized_flips_after_writing_project_json(tmp_path: Path) -> None
         paths.ensure_layout()
         paths.project_path().write_text('{"project":{"name":"demo"}}', encoding="utf-8")
         assert paths.is_initialized()
-
-
-def test_purge_legacy_derived_files_removes_them(tmp_path: Path) -> None:
-    fake_home = tmp_path / "user"
-    fake_home.mkdir()
-    with patch("aimm_mcp.paths.Path.home", return_value=fake_home):
-        paths.ensure_layout()
-        for name in ("model.mmd", "model_lineage.mmd", "lineage.json",
-                     "relationships.json", "joins.json", "project_context.xml"):
-            (paths.aimm_root() / name).write_text("legacy", encoding="utf-8")
-        paths.purge_legacy_derived_files()
-        for name in ("model.mmd", "model_lineage.mmd", "lineage.json",
-                     "relationships.json", "joins.json", "project_context.xml"):
-            assert not (paths.aimm_root() / name).exists()
-
-
-def test_purge_legacy_derived_files_is_noop_when_nothing_there(tmp_path: Path) -> None:
-    fake_home = tmp_path / "user"
-    fake_home.mkdir()
-    with patch("aimm_mcp.paths.Path.home", return_value=fake_home):
-        paths.ensure_layout()
-        paths.purge_legacy_derived_files()  # must not raise

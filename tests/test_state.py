@@ -1,8 +1,7 @@
-"""Unified project.json state + legacy-layout migration."""
+"""state.py — read/write project.json + helpers."""
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,7 +10,6 @@ from aimm_mcp.schemas import (
     Connection,
     Project,
     ProjectConfig,
-    Relationship,
     TableMeta,
 )
 
@@ -42,38 +40,6 @@ def test_save_then_load_roundtrips(tmp_path: Path) -> None:
         assert back.tables[0].table_name == "orders"
         # save() stamps an updated_at.
         assert back.updated_at is not None
-
-
-def test_legacy_per_file_layout_is_migrated(tmp_path: Path) -> None:
-    with _patched_home(tmp_path):
-        # Simulate the v0.1 per-file layout. load() should consolidate
-        # into project.json AND remove the old files.
-        paths.ensure_layout()
-        (paths.aimm_root() / "aimm.json").write_text(
-            json.dumps({"name": "legacy", "dialect": "trino"}),
-            encoding="utf-8",
-        )
-        (paths.aimm_root() / "tables").mkdir(exist_ok=True)
-        (paths.aimm_root() / "tables" / "orders.json").write_text(
-            json.dumps({"table_name": "orders"}),
-            encoding="utf-8",
-        )
-        (paths.aimm_root() / "connections").mkdir(exist_ok=True)
-        (paths.aimm_root() / "connections" / "wh.json").write_text(
-            json.dumps({"name": "wh", "engine": "trino", "dsn": "wh", "catalog": "hive"}),
-            encoding="utf-8",
-        )
-        project = state.load()
-        assert project is not None
-        assert project.project.name == "legacy"
-        assert [t.table_name for t in project.tables] == ["orders"]
-        assert [c.name for c in project.connections] == ["wh"]
-        # Old files cleaned up after migration.
-        assert not (paths.aimm_root() / "aimm.json").exists()
-        assert not (paths.aimm_root() / "tables").exists()
-        assert not (paths.aimm_root() / "connections").exists()
-        # New unified file exists.
-        assert (paths.aimm_root() / "project.json").exists()
 
 
 def test_mutate_fires_after_mutation_hook(tmp_path: Path) -> None:

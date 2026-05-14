@@ -42,10 +42,6 @@ tracked table. Share the project with a teammate by handing them
 No derived snapshots on disk. Renderings (XML / markdown / raw JSON)
 happen in-memory when `aimm_read_project_context` is called.
 
-Pre-v0.3 layouts (`aimm.json` + `tables/*.json` + `connections/*.json`,
-or derived mermaid / json snapshots from v0.2) are migrated /
-cleaned up on first load.
-
 ## Engines
 
 Three engines via ODBC: `trino`, `sql_server`, `databricks`. Connection

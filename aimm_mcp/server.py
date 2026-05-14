@@ -44,14 +44,9 @@ def _build_server() -> Server:
 
 
 async def run() -> None:
-    # Project layout + legacy cleanup of derived artefacts from prior
-    # versions (mermaid diagrams, lineage.json, relationships.json,
-    # joins.json, project_context.xml). The MCP server has one source
-    # of truth: AIMM/project.json. Everything else is in-memory.
     paths.ensure_layout()
-    paths.purge_legacy_derived_files()
-    # Wire the diagnostics log so every information_schema query the
-    # server issues writes one line to AIMM/diagnostics.log.
+    # Every information_schema query the runner issues from here on
+    # writes one line to AIMM/diagnostics.log.
     from .diagnostics.log import FileQueryLogger
     from .odbc.runner import set_query_logger
     set_query_logger(FileQueryLogger(paths.diagnostics_log_path()))
