@@ -110,3 +110,29 @@ class TableMeta(BaseModel):
     # Whether the live DB object is a table or a view. Drives icon
     # selection on UI clients; cosmetic for the MCP server itself.
     db_kind: Optional[Literal["table", "view"]] = None
+
+
+class Project(BaseModel):
+    """Unified project document — the contents of ~/Documents/AIMM/project.json.
+
+    Single source of truth for everything an AIMM session reads or
+    writes: project header, every connection, every table (with its
+    columns / primary keys / relationships / upstream lineage).
+
+    Derived artefacts (mermaid diagrams, lineage.json, relationships.json,
+    joins.json, project_context.xml) are regenerated from this document
+    on every mutation. The discovered_joins inventory and the diagnostics
+    log live in their own files because they aren't project state —
+    discovered joins are candidates from a scan, diagnostics is an
+    append-log.
+
+    Shared by handing a teammate this one JSON file.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    schema_version: int = 1
+    updated_at: Optional[str] = None
+    project: ProjectConfig
+    connections: list[Connection] = Field(default_factory=list)
+    tables: list[TableMeta] = Field(default_factory=list)

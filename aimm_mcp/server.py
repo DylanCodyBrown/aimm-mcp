@@ -47,6 +47,13 @@ async def run() -> None:
     # Always make sure the layout exists before the agent starts
     # calling tools. Idempotent — costs one mkdir on a hot path.
     paths.ensure_layout()
+    # Wire the auto-regenerate hook: every mutation through state.mutate
+    # rebuilds the derived artefacts (mermaid, lineage.json,
+    # relationships.json, joins.json, project_context.xml) so they
+    # stay in lock-step with project.json without the agent needing
+    # to call aimm_regenerate_mermaid by hand.
+    from .tools import diagrams as _diagrams
+    _diagrams.install_auto_regenerate()
     server = _build_server()
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())

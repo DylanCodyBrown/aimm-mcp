@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp.types import TextContent, Tool
 
-from .. import paths, repo
+from .. import paths, state
 from ..discover import scan as scan_module
 from ..discover import store as store_module
 
@@ -57,8 +57,8 @@ async def _scan_folder(args: dict[str, Any]) -> list[TextContent]:
 
     dialect = args.get("dialect")
     if dialect is None:
-        cfg = repo.read_project()
-        dialect = cfg.dialect if cfg else None
+        project = state.load()
+        dialect = project.project.dialect if project else None
     max_files = int(args.get("max_files") or 5000)
 
     started = time.monotonic()
