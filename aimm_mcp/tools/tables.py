@@ -20,6 +20,7 @@ from ..schemas import (
     Relationship,
     TableMeta,
 )
+from . import _common
 
 
 _PATCH_DENYLIST = {"table_name", "source_file"}
@@ -130,6 +131,9 @@ async def dispatch(name: str, args: dict[str, Any]) -> list[TextContent]:
 
 
 async def _update_table(args: dict[str, Any]) -> list[TextContent]:
+    err = _common.ensure_active()
+    if err:
+        return err
     name = args.get("name")
     patch_raw = args.get("patch") or {}
     if not name:
@@ -166,6 +170,9 @@ async def _update_table(args: dict[str, Any]) -> list[TextContent]:
 
 
 async def _set_primary_key(args: dict[str, Any]) -> list[TextContent]:
+    err = _common.ensure_active()
+    if err:
+        return err
     name = args.get("table")
     cols = args.get("columns") or []
     if not name:
@@ -201,6 +208,9 @@ async def _set_primary_key(args: dict[str, Any]) -> list[TextContent]:
 
 
 async def _add_relationship(args: dict[str, Any]) -> list[TextContent]:
+    err = _common.ensure_active()
+    if err:
+        return err
     from_table = args.get("from")
     to_table = args.get("to")
     from_columns = args.get("from_columns") or []
@@ -252,6 +262,9 @@ async def _add_relationship(args: dict[str, Any]) -> list[TextContent]:
 
 
 async def _add_upstream(args: dict[str, Any]) -> list[TextContent]:
+    err = _common.ensure_active()
+    if err:
+        return err
     from_table = args.get("from")
     ref = args.get("ref")
     description = args.get("description")

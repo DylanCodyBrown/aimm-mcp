@@ -17,10 +17,14 @@ from typing import Awaitable, Callable
 
 from mcp.types import TextContent, Tool
 
-from . import connections, diagnostics, joins, pending, project, tables
+from . import connections, diagnostics, joins, pending, project, session, tables
 
 
-GROUPS = [project, connections, tables, joins, diagnostics, pending]
+# Order shapes the tool list returned to clients. Session tools go
+# first so the agent's "discover what's here" reflex lands on
+# aimm_show_active_project / aimm_list_projects before anything
+# project-touching.
+GROUPS = [session, project, connections, tables, joins, diagnostics, pending]
 
 
 def all_tools() -> list[Tool]:

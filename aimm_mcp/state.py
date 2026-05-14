@@ -1,18 +1,23 @@
-"""Project state — one JSON file owns everything.
+"""Project state — one JSON file per project, location resolved via `session`.
 
-`~/Documents/AIMM/project.json` is the single source of truth. It
-holds the project header, every connection, every tracked table.
-Tools read and write through here.
+`session.active_project_path()` says which file to read / write. That
+file is a unified `<slug>.aimm.json` document holding the project
+header, every connection, every tracked table. Tools read and write
+through here.
 
 Public surface stays narrow:
 
-  load()          → Project | None     read project.json
-  save(project)   → Path                atomic-write project.json
+  load()          → Project | None     read the active project file
+  save(project)   → Path                atomic-write the active project file
   mutate(fn)      → Project             load → fn(project) → save
 
 `mutate` is the only safe write path. Every tool that changes
 state calls it exactly once per invocation; that gives one place to
 validate, atomic-write, and (optionally) fire a hook.
+
+If no active project is set, `load` returns None and `mutate` /
+`save` raise `ActiveProjectNotSelected`. Tools translate that into a
+user-facing error with the bootstrap hint.
 """
 
 from __future__ import annotations
@@ -24,8 +29,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import paths
+from . import paths, session
 from .schemas import Connection, Project, ProjectConfig, TableMeta
+from .session import ActiveProjectNotSelected
 
 
 # After-mutation hook. Optional — nothing in the server wires it
@@ -40,10 +46,10 @@ def set_after_mutation_hook(hook: Optional[Callable[[Project], None]]) -> None:
 
 
 def load() -> Optional[Project]:
-    """Return the current project, or None when not yet initialised."""
+    """Return the active project, or None when none is selected / file missing."""
     paths.ensure_layout()
-    pj = paths.project_path()
-    if not pj.exists():
+    pj = session.active_project_path()
+    if pj is None or not pj.exists():
         return None
     try:
         data = json.loads(pj.read_text(encoding="utf-8"))
@@ -53,9 +59,15 @@ def load() -> Optional[Project]:
 
 
 def save(project: Project) -> Path:
-    """Atomic write of project.json with a fresh `updated_at`."""
+    """Atomic write of the active project file with a fresh `updated_at`."""
+    target = session.require_active_project_path()
+    return write_to(project, target)
+
+
+def write_to(project: Project, target: Path) -> Path:
+    """Atomic write to a specific path. Used by `init_project` to create the file
+    before the active-project pointer is set."""
     project = project.model_copy(update={"updated_at": _now_iso()})
-    target = paths.project_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     payload = project.model_dump(exclude_none=False)
     fd, tmp = tempfile.mkstemp(prefix=".project.", suffix=".json.tmp", dir=str(target.parent))
@@ -75,19 +87,21 @@ def save(project: Project) -> Path:
 def mutate(fn: Callable[[Project], Project]) -> Project:
     """Load → transform → save in one shot, then fire the hook.
 
-    `fn` receives the current project (an empty one if no
-    project.json exists yet, so create-on-patch paths work without
-    a special-case) and returns the project to persist.
+    Raises `ActiveProjectNotSelected` if no active project is set —
+    tool layer is expected to catch and surface the bootstrap hint.
     """
+    # Eagerly resolve so the error path is the same whether the file
+    # is missing because the user hasn't picked one yet, or for any
+    # other reason.
+    target = session.require_active_project_path()
     current = load()
     if current is None:
-        # Caller is mutating before init. Bootstrap with a placeholder
-        # name; init_project overrides this. Raising here would force
-        # every write-path to error-check, which makes the surface
-        # brittle for agents.
+        # File exists per active-project pointer, but couldn't be
+        # parsed. Fall back to a placeholder header so the tool
+        # writing into a fresh document still works.
         current = Project(project=ProjectConfig(name="Untitled"))
     next_state = fn(current)
-    save(next_state)
+    write_to(next_state, target)
     if _after_mutation_hook is not None:
         try:
             _after_mutation_hook(next_state)

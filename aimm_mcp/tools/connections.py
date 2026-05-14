@@ -16,6 +16,7 @@ from .. import paths, state
 from ..catalog import browser
 from ..odbc import dsn as dsn_module
 from ..schemas import Column, Connection, TableMeta
+from . import _common
 
 
 TOOLS: list[Tool] = [
@@ -106,6 +107,9 @@ async def dispatch(name: str, args: dict[str, Any]) -> list[TextContent]:
 
 
 async def _upsert_connection(args: dict[str, Any]) -> list[TextContent]:
+    err = _common.ensure_active()
+    if err:
+        return err
     try:
         conn = Connection(**{k: v for k, v in args.items() if v is not None})
     except Exception as err:  # noqa: BLE001
@@ -135,14 +139,16 @@ async def _list_dsns(_: dict[str, Any]) -> list[TextContent]:
 
 
 async def _browse(args: dict[str, Any]) -> list[TextContent]:
-    project = state.load()
+    project, err = _common.load_active()
+    if err:
+        return err
     conn_name = args.get("connection")
     schema = args.get("schema")
     table = args.get("table")
     search = (args.get("search") or "").lower()
 
     if not conn_name:
-        if project is None or not project.connections:
+        if not project.connections:
             return [TextContent(type="text", text="No connections recorded. Call aimm_upsert_connection first.")]
         lines = [
             f"  - {c.name}  ({c.engine}, dsn={c.dsn}, catalog={c.catalog or 'none'})"
@@ -150,8 +156,6 @@ async def _browse(args: dict[str, Any]) -> list[TextContent]:
         ]
         return [TextContent(type="text", text="Project connections:\n" + "\n".join(lines))]
 
-    if project is None:
-        return [TextContent(type="text", text="No project initialised.")]
     conn = state.find_connection(project, conn_name)
     if conn is None:
         return [TextContent(type="text", text=f"Unknown connection '{conn_name}'.")]
@@ -186,9 +190,9 @@ async def _refresh_columns(args: dict[str, Any]) -> list[TextContent]:
     force = bool(args.get("force"))
     table_arg = args.get("table")
 
-    project = state.load()
-    if project is None:
-        return [TextContent(type="text", text="No project initialised.")]
+    project, err = _common.load_active()
+    if err:
+        return err
     targets = [t for t in project.tables if not table_arg or t.table_name == table_arg]
     if table_arg and not targets:
         return [TextContent(type="text", text=f"Unknown table '{table_arg}'.")]

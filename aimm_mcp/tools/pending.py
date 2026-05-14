@@ -18,6 +18,7 @@ from .. import state
 from ..catalog import browser
 from ..parse.diff import ColumnDiff, diff_columns
 from ..schemas import Column, TableMeta
+from . import _common
 
 
 TOOLS: list[Tool] = [
@@ -50,9 +51,9 @@ async def dispatch(name: str, args: dict[str, Any]) -> list[TextContent]:
 
 
 async def _get_pending(args: dict[str, Any]) -> list[TextContent]:
-    project = state.load()
-    if project is None:
-        return [TextContent(type="text", text="No project initialised.")]
+    project, err = _common.load_active()
+    if err:
+        return err
     table_arg = args.get("table")
     if args.get("force"):
         browser.clear_cache()

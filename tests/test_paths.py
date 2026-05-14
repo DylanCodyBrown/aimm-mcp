@@ -25,11 +25,9 @@ def test_ensure_layout_is_idempotent(tmp_path: Path) -> None:
         assert paths.aimm_root().exists()
 
 
-def test_is_initialized_flips_after_writing_project_json(tmp_path: Path) -> None:
+def test_state_file_path_sits_inside_aimm_root(tmp_path: Path) -> None:
     fake_home = tmp_path / "user"
     fake_home.mkdir()
     with patch("aimm_mcp.paths.Path.home", return_value=fake_home):
-        assert not paths.is_initialized()
-        paths.ensure_layout()
-        paths.project_path().write_text('{"project":{"name":"demo"}}', encoding="utf-8")
-        assert paths.is_initialized()
+        assert paths.state_file_path().parent == paths.aimm_root()
+        assert paths.state_file_path().name == "state.json"
