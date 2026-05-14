@@ -112,6 +112,24 @@ tool runs — these tools handle that bootstrap.
   duplicates, composite keys supported).
 - **`aimm_add_upstream`** — append a lineage edge.
 
+### Semantic context (the "what it means" layer)
+
+The structural fields above tell the agent what's *there*. These
+tell it what those things *mean* — captured once, surfaced on
+every subsequent `aimm_read_project_context` call.
+
+- **`aimm_set_table_grain`** — one-line "what is a row?" per table.
+- **`aimm_add_pitfall`** — append-with-dedupe to a table's "don't do
+  this" list.
+- **`aimm_set_column_classification`** — flag a column as
+  pii / phi / restricted / internal / public.
+- **`aimm_add_glossary_term`** — upsert a domain-vocabulary entry.
+- **`aimm_add_measure`** — upsert a KPI / metric with definition +
+  formula.
+- **`aimm_update_project_config`** — patch the project header
+  (description, conventions, dialect, default_connection,
+  modeling_paradigm, tags).
+
 ### Folder scan for joins
 
 - **`aimm_scan_folder_for_joins`** — walk a local folder of `.sql`

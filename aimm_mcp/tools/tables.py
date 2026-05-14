@@ -27,7 +27,14 @@ _PATCH_DENYLIST = {"table_name", "source_file"}
 _ALLOWED_PATCH_KEYS = {
     "connection",
     "description",
+    "grain",
     "tags",
+    "aliases",
+    "pitfalls",
+    "owner",
+    "refresh_cadence",
+    "refresh_notes",
+    "scd",
     "columns",
     "primary_keys",
     "relationships",
@@ -36,6 +43,9 @@ _ALLOWED_PATCH_KEYS = {
     "staging_target",
     "columns_from",
     "db_kind",
+    "row_count_last_run",
+    "last_run_at",
+    "paradigm_role",
 }
 
 

@@ -1,7 +1,7 @@
 ---
 name: aimm-scaffold
-description: Scaffold or extend an AIMM (AI Model Manager) data model using the aimm-mcp tools. Use when the user wants to pick a project, set up a new model, add a connection, document tables, declare relationships or lineage, scan a folder of SQL for joins, or inspect the current project state. Don't use for unrelated SQL work.
-allowed-tools: aimm_set_projects_folder, aimm_list_projects, aimm_set_active_project, aimm_show_active_project, aimm_init_project, aimm_read_project_context, aimm_upsert_connection, aimm_list_system_dsns, aimm_browse_connection, aimm_refresh_columns, aimm_update_table, aimm_set_primary_key, aimm_add_relationship, aimm_add_upstream, aimm_scan_folder_for_joins, aimm_show_diagnostics_log, aimm_get_pending_changes
+description: Scaffold or extend an AIMM (AI Model Manager) data model using the aimm-mcp tools. Use when the user wants to pick a project, set up a new model, add a connection, document tables, declare relationships or lineage, capture grain / pitfalls / glossary / measures, scan a folder of SQL for joins, or inspect the current project state. Don't use for unrelated SQL work.
+allowed-tools: aimm_set_projects_folder, aimm_list_projects, aimm_set_active_project, aimm_show_active_project, aimm_init_project, aimm_read_project_context, aimm_upsert_connection, aimm_list_system_dsns, aimm_browse_connection, aimm_refresh_columns, aimm_update_table, aimm_set_primary_key, aimm_add_relationship, aimm_add_upstream, aimm_set_table_grain, aimm_add_pitfall, aimm_set_column_classification, aimm_add_glossary_term, aimm_add_measure, aimm_update_project_config, aimm_scan_folder_for_joins, aimm_show_diagnostics_log, aimm_get_pending_changes
 ---
 
 # AIMM scaffold
@@ -100,6 +100,41 @@ project into your context, then proceed with normal work.
 7. **Add lineage (if the user knows).** `aimm_add_upstream({from, ref,
    description?})`. `ref` can be a tracked table's name or a free-form
    external identifier (`raw.public.orders`). Don't fabricate.
+
+8. **Capture the semantic layer.** This is where the project becomes
+   *self-explanatory* to the next agent that opens it. Whenever the
+   user tells you something a structural read wouldn't reveal, write
+   it down with the dedicated tool:
+
+   - **Grain.** `aimm_set_table_grain({table, grain})`. One short
+     line per table — "one row per order line item". Anchors every
+     fact-vs-dim conversation.
+   - **Pitfalls.** `aimm_add_pitfall({table, message})`. Short "don't
+     do this" rules — "Don't join on customer_email; use customer_id
+     (email is reused after anonymisation)." Dedupes exact duplicates.
+   - **Column sensitivity.** `aimm_set_column_classification({table,
+     column, classification})`. `pii` / `phi` / `restricted` /
+     `internal` / `public`. The agent self-guardrails on these.
+   - **Glossary.** `aimm_add_glossary_term({term, definition})`.
+     Domain dictionary — "active customer = at least one paid order
+     in the trailing 90 days". Upsert by term.
+   - **Measures.** `aimm_add_measure({name, definition, formula?,
+     owner?})`. KPI definitions. Always capture the **formula** so
+     the next agent quotes it instead of inventing one.
+   - **Project header / conventions.** `aimm_update_project_config({patch})`.
+     Use for `description`, `conventions` ("all booleans end in
+     _flag, all dates UTC"), `dialect`, `default_connection`,
+     `modeling_paradigm`, `tags`.
+   - **Everything else.** `aimm_update_table({name, patch})` accepts
+     every other semantic field as a patch key: `aliases`, `owner`,
+     `refresh_cadence`, `refresh_notes`, `scd: {type, valid_from,
+     valid_to, is_current_flag}`. Column-level: `quality_notes`,
+     `computed`, `expression`, `example_values`.
+
+   Heuristic: if the user tells you something *about* the data
+   (semantics, conventions, gotchas) and not just its shape, that
+   knowledge belongs in the project. Capture it the moment you hear
+   it.
 
 ## Reading state
 

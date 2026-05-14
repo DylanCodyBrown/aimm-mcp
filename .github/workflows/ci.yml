@@ -45,4 +45,6 @@ jobs:
           echo "$OUT" | grep -q '"aimm_read_project_context"' || { echo "missing aimm_read_project_context"; exit 1; }
           echo "$OUT" | grep -q '"aimm_set_active_project"' || { echo "missing aimm_set_active_project"; exit 1; }
           echo "$OUT" | grep -q '"aimm_list_projects"' || { echo "missing aimm_list_projects"; exit 1; }
+          echo "$OUT" | grep -q '"aimm_set_table_grain"' || { echo "missing aimm_set_table_grain"; exit 1; }
+          echo "$OUT" | grep -q '"aimm_add_glossary_term"' || { echo "missing aimm_add_glossary_term"; exit 1; }
           echo "MCP handshake OK"

@@ -1,6 +1,6 @@
 [project]
 name = "aimm-mcp"
-version = "0.1.0"
+version = "0.3.0"
 description = "Local MCP server for AI Model Manager — captures SQL data-model metadata under ~/Documents/AIMM and exposes it to Claude / any MCP client."
 authors = [
     { name = "Dylan Brown", email = "dylancodybrown@gmail.com" },

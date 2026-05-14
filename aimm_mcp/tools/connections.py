@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from mcp.types import TextContent, Tool
@@ -17,6 +18,10 @@ from ..catalog import browser
 from ..odbc import dsn as dsn_module
 from ..schemas import Column, Connection, TableMeta
 from . import _common
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 TOOLS: list[Tool] = [
@@ -223,6 +228,11 @@ async def _refresh_columns(args: dict[str, Any]) -> list[TextContent]:
         next_cols: list[Column] = []
         for c in cols:
             prior = existing_by_name.get(c.name)
+            # Preserve every user-edited per-column hint (PK / FK
+            # flags, description, classification, quality notes,
+            # computed expression, example values). Only the
+            # shape-driving fields (type, nullable) come from the live
+            # DB; everything else the user / agent has authored stays.
             next_cols.append(Column(
                 name=c.name,
                 type=c.data_type,
@@ -230,10 +240,16 @@ async def _refresh_columns(args: dict[str, Any]) -> list[TextContent]:
                 is_primary_key=prior.is_primary_key if prior else False,
                 is_foreign_key=prior.is_foreign_key if prior else False,
                 description=prior.description if prior else None,
+                classification=prior.classification if prior else "unspecified",
+                quality_notes=prior.quality_notes if prior else None,
+                computed=prior.computed if prior else False,
+                expression=prior.expression if prior else None,
+                example_values=list(prior.example_values) if prior else [],
             ))
         next_tables[idx] = t.model_copy(update={
             "columns": next_cols,
             "columns_from": "information_schema",
+            "last_run_at": _now_iso(),
         })
         refreshed.append(t.table_name)
 
