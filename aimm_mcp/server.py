@@ -44,18 +44,17 @@ def _build_server() -> Server:
 
 
 async def run() -> None:
+    # Project layout + legacy cleanup of derived artefacts from prior
+    # versions (mermaid diagrams, lineage.json, relationships.json,
+    # joins.json, project_context.xml). The MCP server has one source
+    # of truth: AIMM/project.json. Everything else is in-memory.
     paths.ensure_layout()
-    # Wire the diagnostics log first — every information_schema query
-    # the server issues from here on records to AIMM/diagnostics.log.
+    paths.purge_legacy_derived_files()
+    # Wire the diagnostics log so every information_schema query the
+    # server issues writes one line to AIMM/diagnostics.log.
     from .diagnostics.log import FileQueryLogger
     from .odbc.runner import set_query_logger
     set_query_logger(FileQueryLogger(paths.diagnostics_log_path()))
-    # Wire the auto-regenerate hook: every mutation through state.mutate
-    # rebuilds the derived artefacts (mermaid, lineage.json,
-    # relationships.json, joins.json, project_context.xml) so they
-    # stay in lock-step with project.json.
-    from .tools import diagrams as _diagrams
-    _diagrams.install_auto_regenerate()
     server = _build_server()
     async with stdio_server() as (read, write):
         await server.run(read, write, server.create_initialization_options())

@@ -29,26 +29,22 @@ so every project on the machine shares one model.
 ## What lives under `~/Documents/AIMM/`
 
 One canonical document holds the project, every connection, and every
-tracked table. Everything else is a derived snapshot regenerated on
-every mutation. Share the project with a teammate by handing them
+tracked table. Share the project with a teammate by handing them
 `project.json`.
 
 ```
 ~/Documents/AIMM/
 ├── project.json             ← THE source of truth (project + connections + tables)
-├── model.mmd                derived: ER diagram (mermaid)
-├── model_lineage.mmd        derived: upstream→downstream flowchart
-├── lineage.json             derived: flat lineage edges
-├── relationships.json       derived: flat FK edges
-├── joins.json               derived: project-tracked joins (FKs + extracted SQL joins)
-├── project_context.xml      derived: agent-facing XML dump
 ├── discovered_joins.json    candidates from `aimm_scan_folder_for_joins`
 └── diagnostics.log          append-log of every ODBC query the server ran
 ```
 
-Pre-v0.2 layouts (separate `aimm.json` + `tables/*.json` +
-`connections/*.json`) are auto-migrated into `project.json` on first
-load and the legacy files are cleaned up.
+No derived snapshots on disk. Renderings (XML / markdown / raw JSON)
+happen in-memory when `aimm_read_project_context` is called.
+
+Pre-v0.3 layouts (`aimm.json` + `tables/*.json` + `connections/*.json`,
+or derived mermaid / json snapshots from v0.2) are migrated /
+cleaned up on first load.
 
 ## Engines
 
@@ -58,16 +54,18 @@ plus the catalog / database qualifier.
 
 ## Tools
 
-Each tool below is registered with Claude on connection. All writes go
-through `project.json` and fire the auto-regenerate hook so the
-derived artefacts stay in lock-step.
+Every tool reads and writes `project.json` exclusively. There is no
+separate cache, no derived snapshots, no auto-regenerate. The on-disk
+file is the model.
 
 ### Project + context
 
 - **`aimm_init_project`** — bootstrap `~/Documents/AIMM/project.json`.
   Idempotent; arguments patch the header on re-runs.
-- **`aimm_read_project_context`** — return the entire project as XML
-  (default) or markdown. Always call this once at session start.
+- **`aimm_read_project_context`** — return the entire project. Formats:
+  `xml` (default; agent-friendly tag-delimited), `markdown` (prose
+  digest), or `json` (raw contents of `project.json`, same shape the
+  server writes on every mutation).
 
 ### Connections + live catalog
 
@@ -97,11 +95,6 @@ derived artefacts stay in lock-step.
   files, extract JOIN clauses via sqlglot (multi-dialect fallback:
   tsql → spark → none), persist canonical edges to
   `discovered_joins.json`.
-
-### Derived artefacts
-
-- **`aimm_regenerate_mermaid`** — manually refresh every derived file
-  (also fires automatically on every mutation).
 
 ### Diagnostics
 
