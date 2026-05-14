@@ -28,6 +28,7 @@ CONNECTION_DESCRIPTION_MAX = 4_000
 
 EngineId = Literal["trino", "sql_server", "databricks"]
 Cardinality = Literal["one_to_one", "one_to_many", "many_to_many"]
+ParadigmId = Literal["star", "snowflake", "parent_child", "unspecified"]
 
 
 # --- shared shapes ----------------------------------------------------------
@@ -72,10 +73,21 @@ class ProjectConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: str = Field(min_length=1, max_length=120)
+    # 'unspecified' is the default for projects authored by aimm-mcp,
+    # which doesn't have a paradigm-picker UI. The VS Code extension
+    # uses this to drive its layout + lint dispatch; here it's
+    # round-tripped only.
+    modeling_paradigm: ParadigmId = "unspecified"
     dialect: str = "tsql"
     default_connection: Optional[str] = None
     description: str = Field(default="", max_length=PROJECT_DESCRIPTION_MAX)
     tags: list[str] = Field(default_factory=list)
+    # Workspace-glob includes / excludes for which SQL files the
+    # extension treats as part of the project. The MCP doesn't track
+    # source files (no editor concept), but we round-trip these so
+    # the extension can use the same file unchanged.
+    included_files: list[str] = Field(default_factory=list)
+    excluded_files: list[str] = Field(default_factory=list)
 
 
 class Connection(BaseModel):
@@ -96,6 +108,10 @@ class TableMeta(BaseModel):
     table_name: str = Field(min_length=1)
     source_file: Optional[str] = None
     connection: Optional[str] = None
+    # Free-text role under the project's paradigm (e.g. "fact",
+    # "conformed dimension", "scd2 dimension"). 60-char cap matches
+    # the extension. Cosmetic; not validated against the paradigm.
+    paradigm_role: str = Field(default="", max_length=60)
     description: str = Field(default="", max_length=TABLE_DESCRIPTION_MAX)
     tags: list[str] = Field(default_factory=list)
     columns: list[Column] = Field(default_factory=list)
