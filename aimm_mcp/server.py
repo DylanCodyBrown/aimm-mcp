@@ -44,14 +44,16 @@ def _build_server() -> Server:
 
 
 async def run() -> None:
-    # Always make sure the layout exists before the agent starts
-    # calling tools. Idempotent — costs one mkdir on a hot path.
     paths.ensure_layout()
+    # Wire the diagnostics log first — every information_schema query
+    # the server issues from here on records to AIMM/diagnostics.log.
+    from .diagnostics.log import FileQueryLogger
+    from .odbc.runner import set_query_logger
+    set_query_logger(FileQueryLogger(paths.diagnostics_log_path()))
     # Wire the auto-regenerate hook: every mutation through state.mutate
     # rebuilds the derived artefacts (mermaid, lineage.json,
     # relationships.json, joins.json, project_context.xml) so they
-    # stay in lock-step with project.json without the agent needing
-    # to call aimm_regenerate_mermaid by hand.
+    # stay in lock-step with project.json.
     from .tools import diagrams as _diagrams
     _diagrams.install_auto_regenerate()
     server = _build_server()
