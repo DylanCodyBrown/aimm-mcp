@@ -17,10 +17,10 @@ from typing import Awaitable, Callable
 
 from mcp.types import TextContent, Tool
 
-from . import connections, joins, project, tables
+from . import connections, diagrams, joins, project, tables
 
 
-GROUPS = [project, connections, tables, joins]
+GROUPS = [project, connections, tables, joins, diagrams]
 
 
 def all_tools() -> list[Tool]:
